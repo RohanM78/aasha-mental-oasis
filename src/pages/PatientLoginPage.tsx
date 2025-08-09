@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -15,30 +15,46 @@ const PatientLoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [isRegistration, setIsRegistration] = useState(false);
   const [patientExists, setPatientExists] = useState(false);
+  const [hasMarkedRegistration, setHasMarkedRegistration] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && isRegistration && !hasMarkedRegistration) {
+        setTimeout(async () => {
+          try {
+            await (supabase.rpc as any)('mark_patient_registered');
+            setHasMarkedRegistration(true);
+          } catch (err) {
+            console.error('Error marking patient registered via RPC:', err);
+          }
+        }, 0);
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isRegistration, hasMarkedRegistration]);
+
   const checkPatientStatus = async (emailToCheck: string) => {
     try {
-      const { data: patient, error } = await supabase
-        .from('patients')
-        .select('*')
-        .eq('email', emailToCheck)
-        .maybeSingle();
-
+      const { data, error } = await (supabase.rpc as any)('check_patient_email', { p_email: emailToCheck });
       if (error) throw error;
 
-      if (patient) {
-        setPatientExists(true);
-        setIsRegistration(!patient.is_registered);
-        return patient;
-      } else {
-        setPatientExists(false);
-        setIsRegistration(false);
-        return null;
-      }
+      const rows = (data ?? []) as any[];
+      const result = Array.isArray(rows) ? rows[0] : (rows as any);
+      const emailExists = !!result?.email_exists;
+      const isRegistered = !!result?.is_registered;
+
+      setPatientExists(emailExists);
+      setIsRegistration(emailExists ? !isRegistered : false);
+
+      return result;
     } catch (error) {
-      console.error('Error checking patient status:', error);
+      console.error('Error checking patient status via RPC:', error);
+      setPatientExists(false);
+      setIsRegistration(false);
       return null;
     }
   };
@@ -80,18 +96,23 @@ const PatientLoginPage = () => {
         throw new Error("Registration failed");
       }
 
-      // Update patient record to mark as registered
-      const { error: updateError } = await supabase
-        .from('patients')
-        .update({ is_registered: true })
-        .eq('email', email);
-
-      if (updateError) throw updateError;
-
-      toast({
-        title: "Registration successful!",
-        description: "You can now sign in with your credentials.",
-      });
+      // Mark patient as registered via secure RPC if session exists
+      if (authData.session) {
+        try {
+          await (supabase.rpc as any)('mark_patient_registered');
+        } catch (err: any) {
+          console.error('Error marking patient registered:', err);
+        }
+        toast({
+          title: "Registration successful!",
+          description: "You're all set. You can now sign in.",
+        });
+      } else {
+        toast({
+          title: "Confirm your email",
+          description: "We sent a confirmation link. After confirming, return here to sign in.",
+        });
+      }
 
       // Switch to login mode
       setIsRegistration(false);
@@ -131,7 +152,7 @@ const PatientLoginPage = () => {
         .from('patients')
         .select('*')
         .eq('email', authData.user.email)
-        .single();
+        .maybeSingle();
 
       if (patientError || !patient) {
         toast({

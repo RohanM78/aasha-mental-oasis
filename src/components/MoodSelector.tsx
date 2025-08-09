@@ -27,12 +27,8 @@ export const MoodSelector = ({ isPatient = false, patientSession }: MoodSelector
         const today = new Date().toISOString().split('T')[0];
         
         let userId;
-        if (isPatient && patientSession) {
-          userId = patientSession.id;
-        } else {
-          const { data: { user } } = await supabase.auth.getUser();
-          userId = user?.id;
-        }
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
         
         if (userId) {
           await saveMoodEntry(selectedMood, today, userId);

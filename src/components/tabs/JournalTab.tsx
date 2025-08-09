@@ -23,13 +23,8 @@ export const JournalTab = ({ isPatient = false, patientSession }: JournalTabProp
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Get user ID from auth or patient session
-  const getUserId = () => {
-    if (isPatient && patientSession) {
-      return patientSession.id;
-    }
-    return supabase.auth.getUser().then(({ data }) => data.user?.id);
-  };
+  // Always use authenticated user id
+  const getUserId = () => supabase.auth.getUser().then(({ data }) => data.user?.id);
 
   useEffect(() => {
     const loadEntries = async () => {

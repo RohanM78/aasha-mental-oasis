@@ -44,10 +44,9 @@ const LandingPage = () => {
             </div>
           </Card>
 
-          <Card className="group glass-card border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-105 hover:shadow-glow cursor-pointer">
+          <Card className="group glass-card border-primary/20 hover:border-primary/40 transition-all duration-300 hover:scale-105 hover:shadow-glow">
             <div 
               className="p-8 text-center space-y-6"
-              onClick={() => navigate('/patient-login')}
             >
               <div className="w-20 h-20 mx-auto bg-gradient-to-br from-accent to-primary rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                 <UserRound className="w-10 h-10 text-white" />
@@ -57,15 +56,26 @@ const LandingPage = () => {
                   Patient
                 </h2>
                 <p className="text-muted-foreground">
-                  Enter your PIN to access your personal wellness dashboard
+                  Access your personal wellness dashboard
                 </p>
               </div>
-              <Button 
-                className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
-                size="lg"
-              >
-                Continue as Patient
-              </Button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Button 
+                  className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
+                  size="lg"
+                  onClick={() => navigate('/patient-login')}
+                >
+                  Log in
+                </Button>
+                <Button 
+                  className="w-full"
+                  variant="outline"
+                  size="lg"
+                  onClick={() => navigate('/patient-login?mode=register')}
+                >
+                  Create password
+                </Button>
+              </div>
             </div>
           </Card>
         </div>

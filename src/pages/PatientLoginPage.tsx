@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { cleanupAuthState } from "@/lib/authCleanup";
 
 const PatientLoginPage = () => {
   const [email, setEmail] = useState("");
@@ -18,7 +19,7 @@ const PatientLoginPage = () => {
   const [hasMarkedRegistration, setHasMarkedRegistration] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-
+  const [searchParams] = useSearchParams();
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && isRegistration && !hasMarkedRegistration) {
@@ -36,6 +37,17 @@ const PatientLoginPage = () => {
       subscription.unsubscribe();
     };
   }, [isRegistration, hasMarkedRegistration]);
+
+  useEffect(() => {
+    const mode = searchParams.get('mode');
+    if (mode === 'register') {
+      setIsRegistration(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    document.title = isRegistration ? 'Create Password | Aasha' : 'Patient Login | Aasha';
+  }, [isRegistration]);
 
   const checkPatientStatus = async (emailToCheck: string) => {
     try {
@@ -59,6 +71,25 @@ const PatientLoginPage = () => {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!email || !email.includes('@')) {
+      toast({
+        title: 'Enter your email',
+        description: 'Please enter your email to reset your password.',
+      });
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/patient-login`,
+      });
+      if (error) throw error;
+      toast({ title: 'Check your email', description: 'We sent a password reset link.' });
+    } catch (error: any) {
+      toast({ title: 'Reset failed', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const handleEmailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setEmail(newEmail);
@@ -73,10 +104,14 @@ const PatientLoginPage = () => {
     setLoading(true);
 
     try {
+      cleanupAuthState();
+      try { await supabase.auth.signOut({ scope: 'global' }); } catch {}
+      if (!patientExists) {
+        throw new Error("This email is not invited to register. Please contact your psychologist.");
+      }
       if (password !== confirmPassword) {
         throw new Error("Passwords don't match");
       }
-
       if (password.length < 6) {
         throw new Error("Password must be at least 6 characters long");
       }
@@ -135,6 +170,8 @@ const PatientLoginPage = () => {
     setLoading(true);
 
     try {
+      cleanupAuthState();
+      try { await supabase.auth.signOut({ scope: 'global' }); } catch {}
       // Sign in with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -253,6 +290,13 @@ const PatientLoginPage = () => {
                 </p>
               )}
             </div>
+            {!isRegistration && (
+              <div className="text-right -mt-2">
+                <Button type="button" variant="link" onClick={handleResetPassword}>
+                  Forgot password?
+                </Button>
+              </div>
+            )}
 
             {isRegistration && (
               <div className="space-y-2">
@@ -277,6 +321,36 @@ const PatientLoginPage = () => {
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isRegistration ? 'Complete Registration' : 'Sign In'}
             </Button>
+            <div className="mt-4 text-center">
+              {isRegistration ? (
+                <Button type="button" variant="ghost" onClick={() => setIsRegistration(false)}>
+                  Already have a password? Sign in
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={async () => {
+                    if (email && email.includes('@')) {
+                      const res = await checkPatientStatus(email);
+                      if (!res?.email_exists) {
+                        toast({ title: 'Email not found', description: 'Please contact your psychologist to be invited.', variant: 'destructive' });
+                        return;
+                      }
+                      if (res?.is_registered) {
+                        toast({ title: 'Already registered', description: 'You have already created a password. Please sign in.' });
+                        return;
+                      }
+                      setIsRegistration(true);
+                    } else {
+                      toast({ title: 'Enter your email', description: 'Please enter your email to continue.' });
+                    }
+                  }}
+                >
+                  Create password
+                </Button>
+              )}
+            </div>
           </form>
         </Card>
       </div>
